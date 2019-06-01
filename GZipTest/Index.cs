@@ -1,4 +1,7 @@
-﻿namespace GZipTest
+﻿using System.Diagnostics;
+using System.Threading;
+
+namespace GZipTest
 {
     using System;
     using System.Collections;
@@ -7,8 +10,9 @@
 
     public class Index : IEnumerable<IndexEntry>
     {
-        private List<IndexEntry> entries;
-
+        private readonly List<IndexEntry> entries;
+        private readonly SemaphoreSlim sem = new SemaphoreSlim(1, 1);
+        
         public Index()
         {
             entries = new List<IndexEntry>();
@@ -16,34 +20,53 @@
 
         public void Add(IndexEntry entry)
         {
-            entries.Add(entry);
+            sem.Wait();
+            try
+            {
+                entries.Add(entry);
+            }
+            finally
+            {
+                sem.Release();
+            }
         }
 
         public static Index ReadFromFile(string fileName)
         {
             var index = new Index();
-            long totalLenght = new FileInfo(fileName).Length;
-            using (FileStream inFile = new FileStream(fileName, FileMode.Open, FileAccess.Read))
+            try
             {
-                inFile.Seek(-sizeof(long), SeekOrigin.End);
-                var longBuffer = new byte[sizeof(long)];
-                for (int i = 0; i < sizeof(long) / sizeof(byte); i++)
+                long totalLength = new FileInfo(fileName).Length;
+                using (FileStream inFile = new FileStream(fileName, FileMode.Open, FileAccess.Read))
                 {
-                    longBuffer[i] = (byte)inFile.ReadByte();
-                }
-
-                var compressedFileSize = BitConverter.ToInt64(longBuffer, 0);
-                inFile.Seek(compressedFileSize, SeekOrigin.Begin);
-                for (int i = 0; i < totalLenght - compressedFileSize - longBuffer.Length; i += IndexEntry.SizeInBytes)
-                {
-                    var entryBuffer = new byte[IndexEntry.SizeInBytes];
-                    for (int j = 0; j < IndexEntry.SizeInBytes; j++)
+                    inFile.Seek(-sizeof(long), SeekOrigin.End);
+                    var longBuffer = new byte[sizeof(long)];
+                    for (int i = 0; i < sizeof(long) / sizeof(byte); i++)
                     {
-                        entryBuffer[j] = (byte)inFile.ReadByte();
+                        longBuffer[i] = (byte) inFile.ReadByte();
                     }
-                    index.Add(new IndexEntry(entryBuffer));
+
+                    var compressedFileSize = BitConverter.ToInt64(longBuffer, 0);
+                    inFile.Seek(compressedFileSize, SeekOrigin.Begin);
+                    for (int i = 0;
+                        i < totalLength - compressedFileSize - longBuffer.Length;
+                        i += IndexEntry.SizeInBytes)
+                    {
+                        var entryBuffer = new byte[IndexEntry.SizeInBytes];
+                        for (int j = 0; j < IndexEntry.SizeInBytes; j++)
+                        {
+                            entryBuffer[j] = (byte) inFile.ReadByte();
+                        }
+
+                        index.Add(new IndexEntry(entryBuffer));
+                    }
                 }
             }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
+
             return index;
         }
 

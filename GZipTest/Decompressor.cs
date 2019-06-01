@@ -1,12 +1,18 @@
-﻿namespace GZipTest
+﻿using System;
+using System.Threading;
+
+namespace GZipTest
 {
     using System.IO;
-    using System.IO.Compression;
     using System.Linq;
     public class Decompressor
     {
-        private string sourcePath;
-        private string targetPath;
+        private const int MaxBytes = 1024 * 1024 * 1024;
+        private readonly string sourcePath;
+        private readonly string targetPath;
+        private LimitedConcurrentSortedList<long, byte[]> decompressedChunks;
+        private ConcurrentQueue<IndexEntry> indexQueue;
+        private int compressedChunksCount = 0;
 
         public Decompressor(string sourcePath, string targetPath)
         {
@@ -16,23 +22,42 @@
 
         public void Decompress()
         {
-            var index = Index.ReadFromFile(sourcePath).OrderBy(e => e.OriginalPosition);
-            using(var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
-            using (var inFile = new FileStream(sourcePath, FileMode.Open, FileAccess.Read))
+            var index = Index.ReadFromFile(sourcePath).OrderBy(e => e.OriginalPosition).ToList();
+            if (index.Count == 0)
             {
-                foreach (var entry in index)
+                return;
+            }
+
+            this.indexQueue = new ConcurrentQueue<IndexEntry>(index);
+            compressedChunksCount = index.Count;
+            this.decompressedChunks = new LimitedConcurrentSortedList<long, byte[]>(Math.Min((int) (MaxBytes / index.First().CompressedChunk.Size), 1));
+            new ParallelWorkExecutor(ProcessChunk, () => indexQueue.Count == 0, Math.Min(Environment.ProcessorCount, indexQueue.Count)).Start();
+            using (var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
+            {
+                while (decompressedChunks.Count > 0 || compressedChunksCount > 0)
                 {
-                    inFile.Seek(entry.CompressedChunk.Position, SeekOrigin.Begin);
-                    var buffer = new byte[entry.CompressedChunk.Size];
-                    for (int i = 0; i < entry.CompressedChunk.Size; i++)
+                    var chunk = decompressedChunks.GetNextAndRemove();
+                    if (chunk == null)
                     {
-                        buffer[i] = (byte)inFile.ReadByte();
+                        Thread.Sleep(1);
+                        continue;
                     }
-                    var compressedStream = new MemoryStream(buffer);
-                    var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress);
-                    gzipStream.CopyTo(outFile);
+
+                    outFile.Write(chunk, 0, chunk.Length);
                 }
             }
+        }
+
+        private void ProcessChunk()
+        {
+            var indexEntry = indexQueue.Dequeue();
+            using (var reader = new DecompressedChunkStreamReader(new FileStream(sourcePath, FileMode.Open, FileAccess.Read)))
+            {
+                var buffer = reader.Read(indexEntry.CompressedChunk);
+                decompressedChunks.Add(indexEntry.OriginalPosition, buffer);
+            }
+
+            Interlocked.Decrement(ref compressedChunksCount);
         }
 
     }
