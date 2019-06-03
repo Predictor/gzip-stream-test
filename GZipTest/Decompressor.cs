@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Threading;
 
 namespace GZipTest
@@ -28,10 +30,26 @@ namespace GZipTest
                 return;
             }
 
+            if (File.Exists(targetPath))
+            {
+                File.Delete(targetPath);
+            }
+
             this.indexQueue = new ConcurrentQueue<IndexEntry>(index);
             compressedChunksCount = index.Length;
             this.decompressedChunks = new ConcurrentDictionary<long, byte[]>();
-            new ParallelWorkExecutor(ProcessChunk, () => indexQueue.Count == 0, Math.Min(Environment.ProcessorCount, index.Length)).Start();
+            var parallelism = index.Length > 1 ? (int) Math.Min(Math.Max(MemoryLimiter.AllowedMemoryBytes / index[1].OriginalPosition, 1), Environment.ProcessorCount) : 1;
+            if (parallelism == 1)
+            {
+                SequentialDecompress(index);
+                return;
+            }
+            ParallelDecompress(parallelism, index);
+        }
+
+        private void ParallelDecompress(int parallelism, IndexEntry[] index)
+        {
+            new ParallelWorkExecutor(ProcessChunk, () => indexQueue.Count == 0, parallelism).Start();
             using (var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
             {
                 foreach (var entry in index)
@@ -44,6 +62,31 @@ namespace GZipTest
 
                     outFile.Write(chunk, 0, chunk.Length);
                     outFile.Flush();
+                }
+            }
+        }
+
+        private void SequentialDecompress(IEnumerable<IndexEntry> index)
+        {
+            using (var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
+            using (var inFile = new FileStream(sourcePath, FileMode.Open, FileAccess.Read))
+            {
+                foreach (var entry in index)
+                {
+                    inFile.Seek(entry.CompressedChunk.Position, SeekOrigin.Begin);
+                    var buffer = new byte[entry.CompressedChunk.Size];
+                    for (int i = 0; i < entry.CompressedChunk.Size; i++)
+                    {
+                        buffer[i] = (byte) inFile.ReadByte();
+                    }
+
+                    using (var compressedStream = new MemoryStream(buffer))
+                    {
+                        using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress))
+                        {
+                            gzipStream.CopyTo(outFile);
+                        }
+                    }
                 }
             }
         }

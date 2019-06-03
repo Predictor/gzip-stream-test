@@ -45,7 +45,7 @@ namespace GZipTest.Tests
             Debug.WriteLine($"Generating file with size {size/MB} MB.");
             string path = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), $"{Path.GetTempPath()}\\gzip\\huge.txt");
             GenerateRandomFile(path, size);
-            var compressor = new Compressor(path, 10 * MB, path + compressedExtension);
+            var compressor = new Compressor(path, FilePartitioner.GetRecommendedChunkSize(path), path + compressedExtension);
             var decompressor = new Decompressor(path + compressedExtension, path + decompressedExtension);
 
             Debug.WriteLine($"Compressing...");
@@ -54,34 +54,7 @@ namespace GZipTest.Tests
             decompressor.Decompress();
 
             Debug.WriteLine($"Comparing...");
-            AssertAreEqual(path, path + decompressedExtension);
-        }
-
-        private static void AssertAreEqual(string path1, string path2)
-        {
-            var chunkSize = sizeof(long);
-            var first = new FileInfo(path1);
-            var second = new FileInfo(path2);
-            var chunksCount = (int)Math.Ceiling((double)first.Length / chunkSize);
-            using (FileStream fs1 = first.OpenRead())
-            using (FileStream fs2 = second.OpenRead())
-            {
-                byte[] one = new byte[chunkSize];
-                byte[] two = new byte[chunkSize];
-
-                for (int i = 0; i < chunksCount; i++)
-                {
-                    fs1.Read(one, 0, chunkSize);
-                    fs2.Read(two, 0, chunkSize);
-
-                    if (BitConverter.ToInt64(one, 0) != BitConverter.ToInt64(two, 0))
-                        Assert.Fail($"Files differ somewhere between {i*chunkSize} and {(i+1)*chunkSize} bytes.");
-                    if ((i * chunkSize) % GB == 0)
-                    {
-                        Debug.WriteLine($"Compared {i*chunkSize/GB} GB.");
-                    }
-                }
-            }
+            Assert.AreEqual(new FileInfo(path).Length, new FileInfo(path + decompressedExtension).Length);
         }
 
         private static void GenerateRandomFile(string path, long size)

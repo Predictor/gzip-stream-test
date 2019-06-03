@@ -13,6 +13,11 @@ namespace GZipTest
         private readonly List<IndexEntry> entries;
         private readonly SemaphoreSlim sem = new SemaphoreSlim(1, 1);
         
+        public Index(List<IndexEntry> entries)
+        {
+            this.entries = entries;
+        }
+
         public Index()
         {
             entries = new List<IndexEntry>();

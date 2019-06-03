@@ -57,6 +57,7 @@ namespace GZipTest
                 while (!exitCondition())
                 {
                     work();
+                    Thread.Sleep(1);
                 }
             });
             thread.Start();

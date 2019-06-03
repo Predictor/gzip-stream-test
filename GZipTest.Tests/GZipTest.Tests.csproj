@@ -51,6 +51,12 @@
   <ItemGroup>
     <Compile Include="ChunkStreamReaderTests.cs" />
     <Compile Include="CompressorDecompressorTests.cs" />
+    <Compile Include="ConcurrentDictionaryTests.cs" />
+    <Compile Include="ConcurrentQueueTests.cs" />
+    <Compile Include="FilePartitionerTests.cs" />
+    <Compile Include="IndexTests.cs" />
+    <Compile Include="LimitedConcurrentQueueTests.cs" />
+    <Compile Include="MemoryLimiterTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

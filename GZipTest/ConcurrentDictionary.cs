@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace GZipTest
 {
-    public class ConcurrentDictionary<TKey, TValue>
+    public class ConcurrentDictionary<TKey, TValue> : IEnumerable<KeyValuePair<TKey,TValue>>
     {
         private readonly SemaphoreSlim syncSem = new SemaphoreSlim(1, 1);
         private readonly Dictionary<TKey, TValue> internalDict = new Dictionary<TKey, TValue>();
@@ -45,6 +46,16 @@ namespace GZipTest
             {
                 syncSem.Release();
             }
+        }
+
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+        {
+            return internalDict.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable) internalDict).GetEnumerator();
         }
     }
 }

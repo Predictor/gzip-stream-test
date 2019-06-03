@@ -10,17 +10,25 @@ namespace GZipTest
 
         public static void Wait()
         {
-            while (Math.Max(Process.GetCurrentProcess().WorkingSet64, Process.GetCurrentProcess().PrivateMemorySize64) >= CanUse())
+            while (!IsEnoughMemory())
             {
-                Thread.Sleep(1);
+                Thread.Sleep(1000);
             }
         }
 
-        private static long CanUse()
+        public static bool IsEnoughMemory()
         {
-            var performance = new PerformanceCounter("Memory", "Available MBytes");
-            var availableMemory = MB * (long)performance.NextValue();
-            return (IntPtr.Size == 4) ? Math.Min(availableMemory / 2, 512 * MB) : availableMemory / 2;
+            return Math.Max(Process.GetCurrentProcess().WorkingSet64, Process.GetCurrentProcess().PrivateMemorySize64) < AllowedMemoryBytes;
+        }
+
+        public static long AllowedMemoryBytes
+        {
+            get
+            {
+                var performance = new PerformanceCounter("Memory", "Available MBytes");
+                var availableMemory = MB * (long) performance.NextValue();
+                return (IntPtr.Size == 4) ? Math.Min(availableMemory / 2, 512 * MB) : availableMemory / 2;
+            }
         }
     }
 }

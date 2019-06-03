@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 
 namespace GZipTest
 {
     public class Compressor
     {
-        private const int MaxBytes = 1024 * 1024 * 1024;
         private readonly string sourcePath;
         private readonly string targetPath;
         private readonly ConcurrentQueue<ChunkDescriptor> sourceChunks;
@@ -18,7 +18,7 @@ namespace GZipTest
         {
             this.sourcePath = sourcePath;
             this.targetPath = targetPath;
-            this.compressedChunks = new LimitedConcurrentQueue<CompressedChunk>(Math.Max(MaxBytes / chunkSize, 1));
+            this.compressedChunks =  new LimitedConcurrentQueue<CompressedChunk>(Math.Max((int)Math.Min(MemoryLimiter.AllowedMemoryBytes / chunkSize, int.MaxValue), 1));
             this.sourceChunks = new ConcurrentQueue<ChunkDescriptor>(FilePartitioner.CalculateChunks(sourcePath, chunkSize));
             this.uncompressedChunksCount = sourceChunks.Count;
         }
@@ -30,8 +30,12 @@ namespace GZipTest
                 return;
             }
 
-            new ParallelWorkExecutor(this.ProcessAndEnqueueChunk, () => sourceChunks.Count == 0, Math.Min(Environment.ProcessorCount, sourceChunks.Count)).Start();
+            if (File.Exists(targetPath))
+            {
+                File.Delete(targetPath);
+            }
 
+            new ParallelWorkExecutor(this.ProcessAndEnqueueChunk, () => sourceChunks.Count == 0, Math.Min(Environment.ProcessorCount, sourceChunks.Count)).Start();
             while (uncompressedChunksCount > 0 || compressedChunks.Count > 0)
             {
                 DequeueAndWriteNextChunk();
@@ -42,7 +46,6 @@ namespace GZipTest
 
         private void ProcessAndEnqueueChunk()
         {
-            MemoryLimiter.Wait();
             ChunkDescriptor chunkDescriptor;
             try
             {
@@ -63,12 +66,19 @@ namespace GZipTest
         {
             if (compressedChunks.Count == 0)
             {
+                Thread.Sleep(1);
                 return;
             }
 
-            var compressedChunk = compressedChunks.Dequeue();
-            if (compressedChunk == null)
+            CompressedChunk compressedChunk;
+            try
             {
+                compressedChunk = compressedChunks.Dequeue();
+            }
+            catch (InvalidOperationException)
+            {
+                // queue is empty
+                Thread.Sleep(1);
                 return;
             }
 

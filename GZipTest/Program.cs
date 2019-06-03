@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -46,12 +47,31 @@ namespace GZipTest
             switch (args[0])
             {
                 case "compress":
-                    var compressor = new Compressor(inputFilePath, 1024*1024, outFilePath);
-                    compressor.Compress();
+                    var compressor = new Compressor(inputFilePath, FilePartitioner.GetRecommendedChunkSize(inputFilePath), outFilePath);
+                    try
+                    {
+                        compressor.Compress();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.WriteLine(e);
+                        Console.WriteLine($"Unexpected error occured: {e.Message}.");
+                        return 1;
+                    }
                     break;
                 case "decompress":
                     var decompressor = new Decompressor(inputFilePath, outFilePath);
-                    decompressor.Decompress();
+                    try
+                    {
+                        decompressor.Decompress();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.WriteLine(e);
+                        Console.WriteLine($"Unexpected error occured: {e.Message}.");
+                        return 1;
+                    }
+
                     break;
                 default:
                     Console.WriteLine("Cannot parse arguments.");

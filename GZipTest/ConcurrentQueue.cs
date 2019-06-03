@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace GZipTest
 {
-    public class ConcurrentQueue<T>
+    public class ConcurrentQueue<T> : IEnumerable<T>
     {
         private readonly Queue<T> internalQueue;
         private readonly SemaphoreSlim sem = new SemaphoreSlim(1, 1);
@@ -44,6 +45,16 @@ namespace GZipTest
             {
                 sem.Release();
             }
+        }
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            return internalQueue.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable) internalQueue).GetEnumerator();
         }
     }
 }
