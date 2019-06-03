@@ -54,7 +54,8 @@
     <Compile Include="FilePartitioner.cs" />
     <Compile Include="Index.cs" />
     <Compile Include="IndexEntry.cs" />
-    <Compile Include="LimitedConcurrentSortedList.cs" />
+    <Compile Include="ConcurrentDictionary.cs" />
+    <Compile Include="MemoryLimiter.cs" />
     <Compile Include="ParallelWorkExecutor.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

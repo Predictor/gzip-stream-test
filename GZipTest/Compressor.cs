@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 
 namespace GZipTest
@@ -17,7 +18,7 @@ namespace GZipTest
         {
             this.sourcePath = sourcePath;
             this.targetPath = targetPath;
-            this.compressedChunks = new LimitedConcurrentQueue<CompressedChunk>(Math.Min(MaxBytes / chunkSize, 1));
+            this.compressedChunks = new LimitedConcurrentQueue<CompressedChunk>(Math.Max(MaxBytes / chunkSize, 1));
             this.sourceChunks = new ConcurrentQueue<ChunkDescriptor>(FilePartitioner.CalculateChunks(sourcePath, chunkSize));
             this.uncompressedChunksCount = sourceChunks.Count;
         }
@@ -41,6 +42,7 @@ namespace GZipTest
 
         private void ProcessAndEnqueueChunk()
         {
+            MemoryLimiter.Wait();
             ChunkDescriptor chunkDescriptor;
             try
             {
@@ -54,6 +56,7 @@ namespace GZipTest
 
             compressedChunks.Enqueue(CompressedChunk.FromSourceFile(sourcePath, chunkDescriptor));
             Interlocked.Decrement(ref uncompressedChunksCount);
+            Debug.WriteLine($"Approximate uncompressed chunks count = {uncompressedChunksCount}.");
         }
 
         private void DequeueAndWriteNextChunk()
