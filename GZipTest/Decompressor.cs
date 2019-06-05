@@ -50,20 +50,22 @@ namespace GZipTest
         private void ParallelDecompress(int parallelism, IndexEntry[] index)
         {
             new ParallelWorkExecutor(ProcessChunk, () => indexQueue.Count == 0, parallelism).Start();
-            using (var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
-            {
+            
                 foreach (var entry in index)
                 {
                     byte[] chunk;
                     while (!decompressedChunks.TryRemove(entry.OriginalPosition, out chunk))
                     {
+                        GC.Collect();
                         Thread.Sleep(1);
                     }
 
-                    outFile.Write(chunk, 0, chunk.Length);
-                    outFile.Flush();
+                    using (var outFile = new FileStream(targetPath, FileMode.OpenOrCreate, FileAccess.Write))
+                    {
+                        outFile.Seek(entry.OriginalPosition, SeekOrigin.Begin);
+                        outFile.Write(chunk, 0, chunk.Length);
+                    }
                 }
-            }
         }
 
         private void SequentialDecompress(IEnumerable<IndexEntry> index)

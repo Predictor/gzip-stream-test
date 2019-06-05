@@ -21,10 +21,7 @@ namespace GZipTest
         {
             source.Seek(chunkDescriptor.Position, SeekOrigin.Begin);
             var buffer = new byte[chunkDescriptor.Size];
-            for (long i = 0; i < chunkDescriptor.Size; i++)
-            {
-                buffer[i] = (byte) source.ReadByte();
-            }
+            source.Read(buffer, 0, buffer.Length);
 
             return buffer;
         }
